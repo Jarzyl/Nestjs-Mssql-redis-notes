@@ -1,5 +1,4 @@
-// src/notes/notes.controller.ts
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, Put } from '@nestjs/common';
 import { NotesService } from './notes.service';
 
 @Controller('notes')
@@ -17,5 +16,19 @@ export class NotesController {
   create(@Body() body: { title: string; content: string }) {
     const { title, content } = body;
     return this.notesService.create(title, content);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.notesService.delete(Number(id));
+  }
+
+  @Put(':id')
+  update(
+    @Param('id') id: string,
+    @Body() body: { title: string; content: string },
+  ) {
+    const { title, content } = body;
+    return this.notesService.update(Number(id), title, content);
   }
 }
