@@ -1,48 +1,71 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-
-export interface Note {
-  id: number;
-  title: string;
-  content: string;
-}
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { CreateNoteDto } from './dto/create-note.dto';
+import { UpdateNoteDto } from './dto/update-note.dto';
+import { Note } from './entities/note.entity';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class NotesService {
-  private notes: Note[] = [
-    { id: 1, title: 'Pierwsza notatka', content: 'Treść pierwszej notatki' },
-    { id: 2, title: 'Druga notatka', content: 'Treść drugiej notatki' },
-  ];
+  constructor(
+    @InjectRepository(Note)
+    private readonly notesRepository: Repository<Note>,
 
-  findAll(): Note[] {
-    // Logger.log(this.notes);
-    return this.notes;
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
+  ) {}
+
+  async findAllForUser(userId: number): Promise<Note[]> {
+    const notes = await this.notesRepository.find({
+      where: { user: { id: userId } }, // Filter by user Id
+      select: ['id', 'title', 'content'], // Only note data
+      relations: [], // No relations
+    });
+  
+    console.log('Fetched notes:', notes); // Simple console log
+    return notes;
+  }
+  
+  // Fetch all notes (for all users)
+  findAll(): Promise<Note[]> {
+    return this.notesRepository.find();
   }
 
-  create(title: string, content: string): Note {
-    const newNote = {
-      id: this.notes.length + 1,
-      title,
-      content,
-    };
-    this.notes.push(newNote);
-    return newNote;
-  }
-
-  delete(id: number): void {
-    const noteIndex = this.notes.findIndex(note => note.id === id);
-    if (noteIndex === -1) {
-      throw new NotFoundException('Notatka nie została znaleziona.');
+  async create(createNoteDto: CreateNoteDto): Promise<Note> {
+    const user = await this.usersRepository.findOne({
+      where: { id: createNoteDto.userId },
+    });
+  
+    if (!user) {
+      throw new Error('User not found');
     }
-    this.notes.splice(noteIndex, 1);
+  
+    const newNote = this.notesRepository.create({
+      ...createNoteDto, 
+      user: { id: user.id },  // Pass only user id
+    });
+    console.log('Note to save:', newNote);
+    return this.notesRepository.save(newNote);
+  }
+  
+  async delete(id: number): Promise<void> {
+    const result = await this.notesRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('Note not found.');
+    }
   }
 
-  update(id: number, title: string, content: string): Note {
-    const note = this.notes.find(note => note.id === id);
+  async update(id: number, updateNoteDto: UpdateNoteDto): Promise<Note> {
+    const note = await this.notesRepository.preload({
+      id,
+      ...updateNoteDto,
+    });
+
     if (!note) {
-      throw new NotFoundException('Notatka nie została znaleziona.');
+      throw new NotFoundException('Note not found.');
     }
-    note.title = title;
-    note.content = content;
-    return note;
+
+    return this.notesRepository.save(note);
   }
 }
